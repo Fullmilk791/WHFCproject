@@ -70,4 +70,16 @@
     nbproject/build-impl.xml file. 
 
     -->
+    <path id="classpath">
+        <pathelement location="build"/>
+        <fileset dir="lib">
+            <include name="**/*.jar"/>
+        </fileset>
+    </path>
+
+    <target name="compile">
+        <javac srcdir="src" destdir="build" includeantruntime="false">
+            <classpath refid="classpath"/>
+        </javac>
+    </target>
 </project>
