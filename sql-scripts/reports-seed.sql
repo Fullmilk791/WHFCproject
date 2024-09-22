@@ -5,7 +5,7 @@ USE whfc;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- Empty tables
-TRUNCATE TABLE Users;
+TRUNCATE TABLE User;
 TRUNCATE TABLE Location;
 TRUNCATE TABLE Family;
 TRUNCATE TABLE Family_Member;
@@ -20,8 +20,8 @@ TRUNCATE TABLE Prosperity;
 SET FOREIGN_KEY_CHECKS = 1;
 
 
--- Insert data into Users table
-INSERT INTO Users (username, password, first_name, last_name, email, user_type, phone)
+-- Insert data into User table
+INSERT INTO User (username, password, first_name, last_name, email, user_type, phone)
 VALUES
     ('manager@whfc.com', 'abc123', 'John', 'Doe', 'manager@whfc.com', 'manager', '251-930-586-155'),
     ('client@whfc.com', 'abc123', 'Jane', 'Smith', 'client@whfc.com', 'client', '251-930-586-156'),

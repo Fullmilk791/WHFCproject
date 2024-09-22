@@ -228,9 +228,10 @@ public class ManagerDashboard extends JFrame {
 
         try (Connection c = login2.getConnection()) {
             DatabaseMetaData metaData = c.getMetaData();
+            String catalog = c.getCatalog(); // Retrieves the current catalog (database)
 
             // Retrieve columns for the specified table
-            ResultSet columns = metaData.getColumns(null, null, tableName, null);
+            ResultSet columns = metaData.getColumns(catalog, null, tableName, null);
             java.util.List<String> columnNames = new java.util.ArrayList<>();
             java.util.List<String> columnTypes = new java.util.ArrayList<>();
             java.util.List<String> foreignKeys = new java.util.ArrayList<>();
@@ -465,7 +466,7 @@ public class ManagerDashboard extends JFrame {
 
         // Initialize custom foreign key maps
         customForeignKeyMap = new HashMap<>();
-        customForeignKeyMap.put("Users", "recorded_by");
+        customForeignKeyMap.put("User", "recorded_by");
         customForeignKeyMap.put("Family_Member", "guardian_id");
 
         // Create the top menu bar
@@ -566,7 +567,7 @@ public class ManagerDashboard extends JFrame {
         menuBar.add(menuEducation);
 
         // Users Menu
-        menuUsers = new JMenu("Users");
+        menuUsers = new JMenu("User");
         menuItemViewUsers = new JMenuItem("View Users");
         menuItemAddUser = new JMenuItem("Add User");
         menuUsers.add(menuItemViewUsers);
@@ -726,13 +727,13 @@ public class ManagerDashboard extends JFrame {
         // Users
         menuItemViewUsers.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Users", null, null);
+                viewTable("User", null, null);
             }
         });
 
         menuItemAddUser.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                addRecord("Users");
+                addRecord("User");
             }
         });
 

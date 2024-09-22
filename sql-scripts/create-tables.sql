@@ -8,7 +8,7 @@ CREATE DATABASE whfc;
 USE whfc;
 
 -- Create table for Users
-CREATE TABLE Users (
+CREATE TABLE User (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(100) NOT NULL,
@@ -104,7 +104,7 @@ CREATE TABLE Education (
     recorded_by INT,
     date_of_recording DATE,
     FOREIGN KEY (child_id) REFERENCES Child(id),
-    FOREIGN KEY (recorded_by) REFERENCES Users(id)
+    FOREIGN KEY (recorded_by) REFERENCES User(id)
 );
 
 -- ?use view to show BMI?
@@ -118,7 +118,7 @@ CREATE TABLE Health (
     recorded_by INT,
     date_of_recording DATE,
     FOREIGN KEY (child_id) REFERENCES Child(id),
-    FOREIGN KEY (recorded_by) REFERENCES Users(id)
+    FOREIGN KEY (recorded_by) REFERENCES User(id)
 );
 
 -- ?use view for points column?
@@ -131,5 +131,5 @@ CREATE TABLE Prosperity (
     recorded_by INT,
     date_of_recording DATE,
     FOREIGN KEY (family_id) REFERENCES Family(id),
-    FOREIGN KEY (recorded_by) REFERENCES Users(id)
+    FOREIGN KEY (recorded_by) REFERENCES User(id)
 );

@@ -148,7 +148,7 @@ public class login2 extends javax.swing.JFrame {
         String enteredUsername = username.getText();
         String enteredPassword = new String(password.getPassword());
 
-        String query = "SELECT * FROM users WHERE username = ? AND password = ?";
+        String query = "SELECT * FROM user WHERE username = ? AND password = ?";
 
         try (PreparedStatement statement = c.prepareStatement(query)) {
             statement.setString(1, enteredUsername);

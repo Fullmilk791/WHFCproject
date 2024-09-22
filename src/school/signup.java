@@ -276,7 +276,7 @@ public class signup extends javax.swing.JFrame {
             return;
         }
 
-        String sql = "INSERT INTO users (username, password, first_name, last_name, email, user_type, phone) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO user (username, password, first_name, last_name, email, user_type, phone) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
         if (c != null) {
             try (PreparedStatement statement = c.prepareStatement(sql)) {
