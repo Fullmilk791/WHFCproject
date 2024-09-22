@@ -2,16 +2,22 @@ package school;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.table.TableColumn;
+import javax.swing.table.TableRowSorter;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.sql.*;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.awt.*;
+import school.ReportsPage;
 
 public class ManagerDashboard extends JFrame {
     private JMenuBar menuBar;
-    private JMenu menuBeneficiaries, menuGuardians, menuLocations, menuFamilyStatus, menuEducation, menuIncome, menuPrograms, menuChildren, menuSiblings, menuUsers;
+    private JMenu menuBeneficiaries, menuGuardians, menuLocations, menuFamilyStatus, menuEducation, menuIncome,
+            menuPrograms, menuChildren, menuSiblings, menuUsers;
     private JMenuItem menuItemViewBeneficiaries, menuItemAddBeneficiary;
     private JMenuItem menuItemViewGuardians, menuItemAddGuardian;
     private JMenuItem menuItemViewLocations, menuItemAddLocation;
@@ -23,354 +29,414 @@ public class ManagerDashboard extends JFrame {
     private JMenuItem menuItemViewSiblings, menuItemAddSibling;
     private JMenuItem menuItemViewUsers, menuItemAddUser;
     private JPanel mainPanel;
-    
-    private void viewTable(String tableName, String[] joinTables) {
-        JFrame viewFrame = new JFrame("View " + tableName);
-        viewFrame.setSize(800, 600);
-        viewFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
+    // Add the following interface inside the ManagerDashboard class
+public interface RecordSelectionListener {
+    void onRecordSelected(int selectedId, String displayValue);
+}
+
+    private void viewTable(String tableName, String[] joinTables, RecordSelectionListener listener) {
+        JFrame viewFrame = new JFrame("View " + tableName);
+        viewFrame.setSize(1300, 700); // Increased size to accommodate search components
+        viewFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        viewFrame.setLayout(new BorderLayout());
+    
+        // Create a panel for search
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JLabel searchLabel = new JLabel("Search: ");
+        JTextField searchField = new JTextField(30);
+        JButton searchButton = new JButton("Search");
+        JButton resetButton = new JButton("Reset");
+        searchPanel.add(searchLabel);
+        searchPanel.add(searchField);
+        searchPanel.add(searchButton);
+        searchPanel.add(resetButton);
+    
+        viewFrame.add(searchPanel, BorderLayout.NORTH);
+    
         DefaultTableModel model = new DefaultTableModel();
         JTable table = new JTable(model);
-
+        table.setAutoCreateRowSorter(true); // Enable sorting
+    
+        // RowSorter for filtering
+        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(model);
+        table.setRowSorter(sorter);
+    
+        JScrollPane scrollPane = new JScrollPane(table);
+        viewFrame.add(scrollPane, BorderLayout.CENTER);
+    
+        // If in selection mode, add a Select button
+        if (listener != null) {
+            JButton selectButton = new JButton("Select");
+            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            buttonPanel.add(selectButton);
+            viewFrame.add(buttonPanel, BorderLayout.SOUTH);
+    
+            selectButton.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    int selectedRow = table.getSelectedRow();
+                    if (selectedRow != -1) {
+                        // Convert row index considering sorting
+                        int modelRow = table.convertRowIndexToModel(selectedRow);
+                        Object idValue = model.getValueAt(modelRow, 0); // ID must be in the first column
+                        Object displayValue = model.getValueAt(modelRow, 1); // uses column next to ID as display value
+                        if (idValue instanceof Integer) {
+                            listener.onRecordSelected((Integer) idValue, displayValue != null ? displayValue.toString() : "");
+                            viewFrame.dispose();
+                        } else {
+                            JOptionPane.showMessageDialog(viewFrame, "Invalid ID selected.", "Error", JOptionPane.ERROR_MESSAGE);
+                        }
+                    } else {
+                        JOptionPane.showMessageDialog(viewFrame, "Please select a record to proceed.", "No Selection", JOptionPane.WARNING_MESSAGE);
+                    }
+                }
+            });
+        }
+    
         StringBuilder query = new StringBuilder("SELECT * FROM " + tableName + " t1");
-
+    
         if (joinTables != null) {
             int aliasIndex = 2; // Start alias index from 2 since t1 is used for the main table
             for (String joinTable : joinTables) {
                 String joinAlias = "t" + aliasIndex;
-                String joinColumn = "id";
-                String baseColumn = joinTable + "_id";
+                String joinColumn = "id"; // Primary key of the join table
+                String baseColumn = joinTable.toLowerCase() + "_id"; // Foreign key in the main table
                 query.append(" JOIN ").append(joinTable).append(" ").append(joinAlias)
-                     .append(" ON t1.").append(baseColumn).append(" = ").append(joinAlias).append(".").append(joinColumn);
+                     .append(" ON t1.").append(baseColumn).append(" = ").append(joinAlias)
+                     .append(".").append(joinColumn);
                 aliasIndex++;
             }
         }
-
+    
         try (Connection c = login2.getConnection();
              Statement stmt = c.createStatement();
              ResultSet rs = stmt.executeQuery(query.toString())) {
-
+    
             ResultSetMetaData metaData = rs.getMetaData();
             int columnCount = metaData.getColumnCount();
-
-            // Add column names to the table model
+            // Identify columns to include
+            ArrayList<Integer> columnsToInclude = new ArrayList<>();
+            ArrayList<String> columnNames = new ArrayList<>();
+    
             for (int i = 1; i <= columnCount; i++) {
-                model.addColumn(metaData.getColumnName(i));
+                String columnName = metaData.getColumnName(i);
+                String tableNameColumn = metaData.getTableName(i);
+    
+                // Include the main table's 'id'
+                if ("id".equalsIgnoreCase(columnName) && tableNameColumn.equalsIgnoreCase(tableName)) {
+                    columnsToInclude.add(i);
+                    columnNames.add(columnName);
+                }
+                // Include all other columns except those ending with '_id' from joined tables
+                else if (!"id".equalsIgnoreCase(columnName) || tableNameColumn.equalsIgnoreCase(tableName)) {
+                    if (!columnName.toLowerCase().endsWith("_id")) {
+                        columnsToInclude.add(i);
+                        columnNames.add(tableNameColumn.equalsIgnoreCase(tableName) ? columnName
+                                : tableNameColumn + "." + columnName);
+                    }
+                }
             }
-
+    
+            // Add column names to the table model
+            for (String colName : columnNames) {
+                model.addColumn(colName);
+            }
+    
             // Add rows to the table model
             while (rs.next()) {
-                Object[] row = new Object[columnCount];
-                for (int i = 1; i <= columnCount; i++) {
-                    row[i - 1] = rs.getObject(i);
+                Object[] row = new Object[columnsToInclude.size()];
+                for (int i = 0; i < columnsToInclude.size(); i++) {
+                    row[i] = rs.getObject(columnsToInclude.get(i));
                 }
                 model.addRow(row);
             }
         } catch (SQLException e) {
             e.printStackTrace();
+            JOptionPane.showMessageDialog(viewFrame, "Error fetching data: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
-
-        JScrollPane scrollPane = new JScrollPane(table);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); // Disable auto-resizing to enable horizontal scrolling
-        viewFrame.add(scrollPane);
-        viewFrame.setVisible(true);
-    }
-
-    private void viewBeneficiaries() {
-        JFrame viewFrame = new JFrame("View Beneficiaries");
-        viewFrame.setSize(800, 600);
-        viewFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-
-        String[] columnNames = { "Beneficiary ID", "Child Name", "Guardian Name", "Relation to Guardian", "Location",
-                "Family Status", "Education", "Income", "Sex", "Year of Birth", "Age", "Year Joined", "Year of Stay",
-                "Current Grade" };
-        DefaultTableModel model = new DefaultTableModel(columnNames, 0);
-        JTable table = new JTable(model);
-
-        try (Connection c = login2.getConnection();
-                Statement stmt = c.createStatement();
-                ResultSet rs = stmt.executeQuery(
-                        // Select the necessary columns from the joined tables
-                        "SELECT " +
-                                "b.beneficiary_id, " + // Beneficiary ID from the Beneficiary table
-                                "c.name AS child_name, " + // Child's name from the Child table
-                                "g.name AS guardian_name, " + // Guardian's name from the Guardian table
-                                "c.relation_to_guardian, " + // Relation of the child to the guardian from the Child
-                                                             // table
-                                "CONCAT(l.sub_city, ', ', l.village) AS location, " + // Concatenated location (sub_city
-                                                                                      // and village) from the Location
-                                                                                      // table
-                                "fs.status AS family_status, " + // Family status from the FamilyStatus table
-                                "e.status AS education, " + // Education status from the Education table
-                                "i.income_source, " + // Income source from the Income table
-                                "c.sex, " + // Child's sex from the Child table
-                                "c.yob, " + // Child's year of birth from the Child table
-                                "c.year_joined, " + // Year the child joined from the Child table
-                                "c.year_of_stay, " + // Year of stay from the Child table
-                                "c.current_grade " + // Current grade of the child from the Child table
-                                "FROM Child c " + // Main table is Child, aliased as 'c'
-
-                                "JOIN Beneficiary b ON c.beneficiary_id = b.id " + // Join with Beneficiary table on
-                                                                                   // beneficiary_id
-                                "JOIN Guardian g ON c.guardian_id = g.id " + // Join with Guardian table on guardian_id
-                                "JOIN Location l ON c.location_id = l.id " + // Join with Location table on location_id
-                                "JOIN Family_Status fs ON c.family_status_id = fs.id " + // Join with FamilyStatus table
-                                                                                        // on family_status_id
-                                "JOIN Education e ON c.education_id = e.id " + // Join with Education table on
-                                                                               // education_id
-                                "JOIN Income i ON c.income_id = i.id " + // Join with Income table on income_id
-                                "ORDER BY b.beneficiary_id" // Order the results by beneficiary_id
-                )) {
-
-            while (rs.next()) {
-                String beneficiaryId = rs.getString("beneficiary_id");
-                String childName = rs.getString("child_name");
-                String guardianName = rs.getString("guardian_name");
-                String relationToGuardian = rs.getString("relation_to_guardian");
-                String location = rs.getString("location");
-                String familyStatus = rs.getString("family_status");
-                String education = rs.getString("education");
-                String incomeSource = rs.getString("income_source");
-                String sex = rs.getString("sex");
-                Date yob = rs.getDate("yob");
-                int age = rs.getInt("age");
-                Date yearJoined = rs.getDate("year_joined");
-                int yearOfStay = rs.getInt("year_of_stay");
-                String currentGrade = rs.getString("current_grade");
-
-                model.addRow(new Object[] { beneficiaryId, childName, guardianName, relationToGuardian, location,
-                        familyStatus, education, incomeSource, sex, yob, age, yearJoined, yearOfStay, currentGrade });
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+    
+        // Adjust column widths
+        for (int col = 0; col < table.getColumnCount(); col++) {
+            TableColumn tableColumn = table.getColumnModel().getColumn(col);
+            TableCellRenderer headerRenderer = table.getTableHeader().getDefaultRenderer();
+            Component headerComp = headerRenderer.getTableCellRendererComponent(table, tableColumn.getHeaderValue(),
+                    false, false, 0, 0);
+            int headerWidth = headerComp.getPreferredSize().width;
+            tableColumn.setPreferredWidth(headerWidth + 20); // Add padding for better readability
         }
-
-        JScrollPane scrollPane = new JScrollPane(table);
-        viewFrame.add(scrollPane);
-        viewFrame.setVisible(true);
-    }
-
-    private void addBeneficiary() {
-        JFrame addFrame = new JFrame("Add Beneficiary");
-        addFrame.setSize(400, 200);
-        addFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
     
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-    
-        JTextField beneficiaryIdField = new JTextField(20);
-        JButton addButton = new JButton("Add");
-    
-        panel.add(new JLabel("Beneficiary ID:"));
-        panel.add(beneficiaryIdField);
-        panel.add(addButton);
-    
-        addButton.addActionListener(new ActionListener() {
+        // Search button action
+        searchButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                String beneficiaryId = beneficiaryIdField.getText();
-                try (Connection c = login2.getConnection();
-                     PreparedStatement stmt = c.prepareStatement("INSERT INTO Beneficiary (beneficiary_id) VALUES (?)")) {
-                    stmt.setString(1, beneficiaryId);
-                    stmt.executeUpdate();
-                    JOptionPane.showMessageDialog(addFrame, "Beneficiary added successfully!");
-                    addFrame.dispose();
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
+                String text = searchField.getText();
+                if (text.trim().length() == 0) {
+                    sorter.setRowFilter(null);
+                } else {
+                    // (?i) for case-insensitive search
+                    sorter.setRowFilter(RowFilter.regexFilter("(?i)" + text));
                 }
             }
         });
     
-        addFrame.add(panel);
-        addFrame.setVisible(true);
-    }
-    
-    private void addChildToBeneficiary() {
-        JFrame addFrame = new JFrame("Add Child to Beneficiary");
-        addFrame.setSize(400, 400);
-        addFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10)); // Add padding
-
-        JTextField beneficiaryIdField = new JTextField(20);
-        JTextField childNameField = new JTextField(20);
-        JTextField guardianNameField = new JTextField(20);
-        JTextField relationToGuardianField = new JTextField(20);
-        JTextField subCityField = new JTextField(20);
-        JTextField villageField = new JTextField(20);
-
-        JFormattedTextField yobField = new JFormattedTextField(new SimpleDateFormat("yyyy-MM-dd"));
-        yobField.setColumns(20);
-        JFormattedTextField yearJoinedField = new JFormattedTextField(new SimpleDateFormat("yyyy-MM-dd"));
-        yearJoinedField.setColumns(20);
-
-        JTextField yearOfStayField = new JTextField(20);
-        JTextField currentGradeField = new JTextField(20);
-        JButton addButton = new JButton("Add");
-
-        // Dropdowns for enums
-        String[] familyStatusOptions = {"Both parents", "Divorced", "Orphan", "Half orphan"};
-        JComboBox<String> familyStatusDropdown = new JComboBox<>(familyStatusOptions);
-
-        String[] educationOptions = {"Illiterate", "Primary", "Secondary", "Diploma", "Above"};
-        JComboBox<String> educationDropdown = new JComboBox<>(educationOptions);
-
-        JTextField incomeSourceField = new JTextField(20);
-
-        String[] sexOptions = {"M", "F"};
-        JComboBox<String> sexDropdown = new JComboBox<>(sexOptions);
-
-        panel.add(new JLabel("Beneficiary ID:"));
-        panel.add(beneficiaryIdField);
-        panel.add(new JLabel("Child Name:"));
-        panel.add(childNameField);
-        panel.add(new JLabel("Guardian Name:"));
-        panel.add(guardianNameField);
-        panel.add(new JLabel("Relation to Guardian:"));
-        panel.add(relationToGuardianField);
-        panel.add(new JLabel("Sub City:"));
-        panel.add(subCityField);
-        panel.add(new JLabel("Village:"));
-        panel.add(villageField);
-        panel.add(new JLabel("Family Status:"));
-        panel.add(familyStatusDropdown);
-        panel.add(new JLabel("Education:"));
-        panel.add(educationDropdown);
-        panel.add(new JLabel("Income Source:"));
-        panel.add(incomeSourceField);
-        panel.add(new JLabel("Sex (M/F):"));
-        panel.add(sexDropdown);
-        panel.add(new JLabel("Year of Birth (YYYY-MM-DD):"));
-        panel.add(yobField);
-        panel.add(new JLabel("Year Joined (YYYY-MM-DD):"));
-        panel.add(yearJoinedField);
-        panel.add(new JLabel("Year of Stay:"));
-        panel.add(yearOfStayField);
-        panel.add(new JLabel("Current Grade:"));
-        panel.add(currentGradeField);
-        panel.add(addButton);
-
-        addButton.addActionListener(new ActionListener() {
+        // Reset button action
+        resetButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                Connection c = null;
-                try {
-                    c = login2.getConnection();
-                    c.setAutoCommit(false);
-
-                    // Insert Guardian
-                    String guardianName = guardianNameField.getText();
-                    int guardianId;
-                    try (PreparedStatement stmt = c.prepareStatement(
-                            "INSERT INTO Guardian (name) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
-                        stmt.setString(1, guardianName);
-                        stmt.executeUpdate();
-                        ResultSet rs = stmt.getGeneratedKeys();
-                        if (rs.next()) {
-                            guardianId = rs.getInt(1);
-                        } else {
-                            throw new SQLException("Failed to retrieve guardian ID.");
-                        }
-                    }
-
-                    // Insert Location
-                    String subCity = subCityField.getText();
-                    String village = villageField.getText();
-                    int locationId;
-                    try (PreparedStatement stmt = c.prepareStatement(
-                            "INSERT INTO Location (sub_city, village) VALUES (?, ?)", Statement.RETURN_GENERATED_KEYS)) {
-                        stmt.setString(1, subCity);
-                        stmt.setString(2, village);
-                        stmt.executeUpdate();
-                        ResultSet rs = stmt.getGeneratedKeys();
-                        if (rs.next()) {
-                            locationId = rs.getInt(1);
-                        } else {
-                            throw new SQLException("Failed to retrieve location ID.");
-                        }
-                    }
-
-                    // Insert FamilyStatus
-                    String familyStatus = (String) familyStatusDropdown.getSelectedItem();
-                    int familyStatusId;
-                    try (PreparedStatement stmt = c.prepareStatement(
-                            "INSERT INTO Family_Status (status) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
-                        stmt.setString(1, familyStatus);
-                        stmt.executeUpdate();
-                        ResultSet rs = stmt.getGeneratedKeys();
-                        if (rs.next()) {
-                            familyStatusId = rs.getInt(1);
-                        } else {
-                            throw new SQLException("Failed to retrieve family status ID.");
-                        }
-                    }
-
-                    // Insert Education
-                    String education = (String) educationDropdown.getSelectedItem();
-                    int educationId;
-                    try (PreparedStatement stmt = c.prepareStatement(
-                            "INSERT INTO Education (status) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
-                        stmt.setString(1, education);
-                        stmt.executeUpdate();
-                        ResultSet rs = stmt.getGeneratedKeys();
-                        if (rs.next()) {
-                            educationId = rs.getInt(1);
-                        } else {
-                            throw new SQLException("Failed to retrieve education ID.");
-                        }
-                    }
-
-                    // Insert Income
-                    String incomeSource = incomeSourceField.getText();
-                    int incomeId;
-                    try (PreparedStatement stmt = c.prepareStatement(
-                            "INSERT INTO Income (income_source) VALUES (?)", Statement.RETURN_GENERATED_KEYS)) {
-                        stmt.setString(1, incomeSource);
-                        stmt.executeUpdate();
-                        ResultSet rs = stmt.getGeneratedKeys();
-                        if (rs.next()) {
-                            incomeId = rs.getInt(1);
-                        } else {
-                            throw new SQLException("Failed to retrieve income ID.");
-                        }
-                    }
-
-                    // Insert Child
-                    try (PreparedStatement stmt = c.prepareStatement(
-                            "INSERT INTO Child (beneficiary_id, name, guardian_id, relation_to_guardian, location_id, family_status_id, education_id, income_id, sex, yob, year_joined, year_of_stay, current_grade) " +
-                                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
-                        stmt.setInt(1, Integer.parseInt(beneficiaryIdField.getText()));
-                        stmt.setString(2, childNameField.getText());
-                        stmt.setInt(3, guardianId);
-                        stmt.setString(4, relationToGuardianField.getText());
-                        stmt.setInt(5, locationId);
-                        stmt.setInt(6, familyStatusId);
-                        stmt.setInt(7, educationId);
-                        stmt.setInt(8, incomeId);
-                        stmt.setString(9, (String) sexDropdown.getSelectedItem());
-                        stmt.setDate(10, Date.valueOf(yobField.getText()));
-                        stmt.setDate(11, Date.valueOf(yearJoinedField.getText()));
-                        stmt.setInt(12, Integer.parseInt(yearOfStayField.getText()));
-                        stmt.setString(13, currentGradeField.getText());
-                        stmt.executeUpdate();
-                    }
-
-                    c.commit();
-                    JOptionPane.showMessageDialog(addFrame, "Record inserted successfully!", "Success",
-                    JOptionPane.INFORMATION_MESSAGE);
-                    addFrame.dispose();
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    JOptionPane.showMessageDialog(addFrame, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-                }
+                searchField.setText("");
+                sorter.setRowFilter(null);
             }
         });
-
-        addFrame.add(panel);
-        addFrame.pack(); // Adjust window size to fit content
-        addFrame.setVisible(true);
+    
+        // Allow pressing Enter to trigger search
+        searchField.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                searchButton.doClick();
+            }
+        });
+    
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); // Enable horizontal scrolling
+        viewFrame.setVisible(true);
     }
 
+    /**
+     * Generic method to add a record to any specified table.
+     *
+     * @param tableName The name of the table to add a record to.
+     */
+    private void addRecord(String tableName) {
+        JFrame addFrame = new JFrame("Add Record to " + tableName);
+        addFrame.setSize(500, 600);
+        addFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5,5,5,5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+    
+        java.util.Map<String, JComponent> fieldMap = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Integer> foreignKeyIds = new java.util.HashMap<>(); // To store selected foreign key IDs
+    
+        try (Connection c = login2.getConnection()) {
+            DatabaseMetaData metaData = c.getMetaData();
+    
+            // Retrieve columns for the specified table
+            ResultSet columns = metaData.getColumns(null, null, tableName, null);
+            java.util.List<String> columnNames = new java.util.ArrayList<>();
+            java.util.List<String> columnTypes = new java.util.ArrayList<>();
+            java.util.List<String> foreignKeys = new java.util.ArrayList<>();
+    
+            while (columns.next()) {
+                String columnName = columns.getString("COLUMN_NAME");
+                String dataType = columns.getString("TYPE_NAME");
+
+                // Skip auto-increment primary keys
+                try (ResultSet autoIncrementRS = metaData.getColumns(null, null, tableName, columnName)) {
+                    boolean isAutoIncrement = false;
+                    if (autoIncrementRS.next()) { // Move cursor to the first row
+                        isAutoIncrement = "YES".equalsIgnoreCase(autoIncrementRS.getString("IS_AUTOINCREMENT"));
+                    }
+                    if (isAutoIncrement) {
+                        continue;
+                    } else{
+                        columnNames.add(columnName);
+                        columnTypes.add(dataType);
+                    }
+                }
+    
+                // Check if the column is a foreign key
+                ResultSet fk = metaData.getImportedKeys(null, null, tableName);
+                boolean isForeignKey = false;
+                String fkTable = null;
+                String fkColumn = null;
+                while (fk.next()) {
+                    String fkColumnName = fk.getString("FKCOLUMN_NAME");
+                    if (fkColumnName.equals(columnName)) {
+                        isForeignKey = true;
+                        fkTable = fk.getString("PKTABLE_NAME");
+                        fkColumn = fk.getString("PKCOLUMN_NAME");
+                        break;
+                    }
+                }
+                fk.close();
+                if (isForeignKey) {
+                    foreignKeys.add(fkTable);
+                } else {
+                    foreignKeys.add(null);
+                }
+            }
+            columns.close();
+    
+            // Dynamically create input fields based on columns
+            for (int i = 0; i < columnNames.size(); i++) {
+                String colName = columnNames.get(i);
+                String colType = columnTypes.get(i);
+                String fkTable = foreignKeys.get(i);
+    
+                JLabel label = new JLabel(colName + ":");
+                gbc.gridx = 0;
+                gbc.weightx = 0.3;
+                panel.add(label, gbc);
+    
+                JComponent field;
+    
+                if (fkTable != null) {
+                    // Instead of JComboBox, use a button to open viewTable for selection
+                    JPanel fkPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+                    JTextField fkField = new JTextField(20);
+                    fkField.setEditable(false);
+                    JButton selectButton = new JButton("Select");
+                    fkPanel.add(fkField);
+                    fkPanel.add(selectButton);
+                    field = fkPanel;
+    
+                    selectButton.addActionListener(new ActionListener() {
+                        public void actionPerformed(ActionEvent e) {
+                            viewTable(fkTable, null, new RecordSelectionListener() {
+                                @Override
+                                public void onRecordSelected(int selectedId, String displayValue) {
+                                    fkField.setText("ID: " + selectedId + " ("+ displayValue + " ...)");
+                                    foreignKeyIds.put(colName, selectedId);
+                                }
+                            });
+                        }
+                    });
+    
+                } else if (colType.contains("INT")) {
+                    field = new JTextField(20);
+                } else if (colType.contains("DATE")) {
+                    field = new JTextField(20);
+                } else if (colType.contains("ENUM")) {
+                    // Extract ENUM values
+                    java.util.List<String> enumValues = getEnumValues(c, tableName, colName);
+                    JComboBox<String> comboBox = new JComboBox<>(enumValues.toArray(new String[0]));
+                    field = comboBox;
+                } else if (colType.contains("BOOLEAN")) {
+                    field = new JCheckBox();
+                } else {
+                    field = new JTextField(20);
+                }
+    
+                fieldMap.put(colName, field);
+                gbc.gridx = 1;
+                gbc.weightx = 0.7;
+                panel.add(field, gbc);
+                gbc.gridy++;
+            }
+    
+            // Add Submit Button
+            JButton submitButton = new JButton("Add Record");
+            gbc.gridx = 0;
+            gbc.gridwidth = 2;
+            panel.add(submitButton, gbc);
+    
+            submitButton.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    StringBuilder columnsPart = new StringBuilder();
+                    StringBuilder valuesPart = new StringBuilder();
+                    java.util.List<Object> values = new java.util.ArrayList<>();
+    
+                    for (java.util.Map.Entry<String, JComponent> entry : fieldMap.entrySet()) {
+                        String colName = entry.getKey();
+                        JComponent comp = entry.getValue();
+    
+                        columnsPart.append(colName).append(", ");
+    
+                        if (comp instanceof JPanel) { // Foreign key field
+                            // Retrieve the selected ID from foreignKeyIds
+                            Integer selectedId = foreignKeyIds.get(colName);
+                            valuesPart.append("?, ");
+                            values.add(selectedId);
+                        } else if (comp instanceof JTextField) {
+                            String text = ((JTextField) comp).getText();
+                            valuesPart.append("?, ");
+                            values.add(text.isEmpty() ? null : text);
+                        } else if (comp instanceof JComboBox) {
+                            Object selected = ((JComboBox<?>) comp).getSelectedItem();
+                            valuesPart.append("?, ");
+                            values.add(selected);
+                        } else if (comp instanceof JCheckBox) {
+                            boolean selected = ((JCheckBox) comp).isSelected();
+                            valuesPart.append("?, ");
+                            values.add(selected);
+                        }
+                    }
+    
+                    // Remove trailing commas
+                    if (columnsPart.length() > 0) columnsPart.setLength(columnsPart.length() - 2);
+                    if (valuesPart.length() > 0) valuesPart.setLength(valuesPart.length() - 2);
+    
+                    String sql = "INSERT INTO " + tableName + " (" + columnsPart + ") VALUES (" + valuesPart + ")";
+    
+                    try (Connection insertConn = login2.getConnection();
+                    PreparedStatement pstmt = insertConn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                   for (int i = 0; i < values.size(); i++) {
+                            Object value = values.get(i);
+                            if (value instanceof String) {
+                                pstmt.setString(i + 1, (String) value);
+                            } else if (value instanceof Integer) {
+                                pstmt.setInt(i + 1, (Integer) value);
+                            } else if (value instanceof Boolean) {
+                                pstmt.setBoolean(i + 1, (Boolean) value);
+                            } else {
+                                pstmt.setObject(i + 1, value);
+                            }
+                        }
+    
+                        pstmt.executeUpdate();
+                        ResultSet generatedKeys = pstmt.getGeneratedKeys();
+                        if (generatedKeys.next()) {
+                            JOptionPane.showMessageDialog(addFrame, "Record added successfully with ID: " + generatedKeys.getInt(1));
+                        } else {
+                            JOptionPane.showMessageDialog(addFrame, "Record added successfully.");
+                        }
+                        addFrame.dispose();
+                    } catch (SQLException ex) {
+                        ex.printStackTrace();
+                        JOptionPane.showMessageDialog(addFrame, "Error adding record: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            });
+    
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(addFrame, "Error retrieving table metadata: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+    
+        addFrame.add(new JScrollPane(panel));
+        addFrame.setVisible(true);
+    }
+    /**
+     * Helper method to extract ENUM values from a column.
+     *
+     * @param connection The database connection.
+     * @param tableName  The table name.
+     * @param columnName The column name.
+     * @return A list of ENUM values.
+     * @throws SQLException If a database access error occurs.
+     */
+    private java.util.List<String> getEnumValues(Connection connection, String tableName, String columnName)
+            throws SQLException {
+        java.util.List<String> enumValues = new java.util.ArrayList<>();
+        String sql = "SHOW COLUMNS FROM " + tableName + " LIKE '" + columnName + "'";
+        try (Statement stmt = connection.createStatement();
+                ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) {
+                String type = rs.getString("Type"); // e.g., enum('value1','value2')
+                int start = type.indexOf('(');
+                int end = type.lastIndexOf(')');
+                if (start > -1 && end > -1 && end > start) {
+                    String enumValuesStr = type.substring(start + 1, end);
+                    String[] values = enumValuesStr.split(",");
+                    for (String value : values) {
+                        enumValues.add(value.trim().replace("'", ""));
+                    }
+                }
+            }
+        }
+        return enumValues;
+    }
 
     public ManagerDashboard() {
         setTitle("Manager Dashboard");
@@ -379,6 +445,20 @@ public class ManagerDashboard extends JFrame {
 
         // Create the top menu bar
         menuBar = new JMenuBar();
+
+        // Reports Menu
+JMenu menuReports = new JMenu("Reports");
+JMenuItem menuItemViewReports = new JMenuItem("View Reports");
+menuReports.add(menuItemViewReports);
+menuBar.add(menuReports);
+
+// Add action listener for the Reports menu item
+menuItemViewReports.addActionListener(new ActionListener() {
+    public void actionPerformed(ActionEvent e) {
+        ReportsPage reportsPage = new ReportsPage();
+        reportsPage.setVisible(true);
+    }
+});
 
         // Beneficiaries Menu
         menuBeneficiaries = new JMenu("Beneficiaries");
@@ -478,130 +558,125 @@ public class ManagerDashboard extends JFrame {
         // Add the main panel to the frame
         getContentPane().add(mainPanel, BorderLayout.CENTER);
 
-        //action listeners for the menu items
+        // action listeners for the menu items
         menuItemViewBeneficiaries.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewBeneficiaries();
+                viewTable("Beneficiary", null, null);
             }
         });
 
         menuItemAddBeneficiary.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                addBeneficiary();
-            }
-        });
-
-        menuItemAddChild.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                addChildToBeneficiary();
+                addRecord("Beneficiary");
             }
         });
 
         menuItemViewGuardians.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Guardian", null);
+                viewTable("Guardian", null, null);
             }
         });
 
         menuItemAddGuardian.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addGuardian();
+                addRecord("Guardian");
             }
         });
 
         menuItemViewLocations.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Location", null);
+                viewTable("Location", null, null);
             }
         });
 
         menuItemAddLocation.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addLocation();
+                addRecord("Location");
             }
         });
 
         menuItemViewFamilyStatus.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Family_Status", null);
+                viewTable("Family_Status", null, null);
             }
         });
 
         menuItemAddFamilyStatus.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addFamilyStatus();
+                addRecord("Family_Status");
             }
         });
 
         menuItemViewEducation.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Education", null);
+                viewTable("Education", null, null);
             }
         });
 
         menuItemAddEducation.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addEducation();
+                addRecord("Education");
             }
         });
 
         menuItemViewIncome.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Income", null);
+                viewTable("Income", null, null);
             }
         });
 
         menuItemAddIncome.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addIncome();
+                addRecord("Income");
             }
         });
 
         menuItemViewPrograms.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Program", null);
+                viewTable("Program", null, null);
             }
         });
 
         menuItemAddProgram.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addProgram();
+                addRecord("Program");
             }
         });
 
         menuItemViewChildren.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Child", new String[]{"Beneficiary", "Guardian", "Location", "Family_Status", "Education", "Income", "program"});
+                viewTable("Child", new String[] { "Beneficiary", "Guardian", "Location", "Family_Status", "Education",
+                        "Income", "program" }, null);
             }
         });
 
         menuItemAddChild.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addChild();
+                addRecord("Child");
             }
         });
 
         menuItemViewSiblings.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Sibling", new String[]{"Child"});
+                viewTable("Sibling", new String[] { "Child" }, null);
             }
         });
 
         menuItemAddSibling.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addSibling();
+                addRecord("Sibling");
             }
         });
 
         menuItemViewUsers.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Users", null);
+                viewTable("Users", null, null);
             }
         });
 
         menuItemAddUser.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // Implement addUser();
+                addRecord("Users");
             }
         });
 
@@ -613,7 +688,7 @@ public class ManagerDashboard extends JFrame {
                 LoginFrame = new login2();
                 LoginFrame.setVisible(true);
                 LoginFrame.setLocationRelativeTo(null);
-                dispose(); // Close the signup window
+                dispose(); // Close the current window
             }
         });
     }
