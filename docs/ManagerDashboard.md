@@ -56,8 +56,8 @@ private JMenuItem menuItemViewBeneficiaries, menuItemAddBeneficiary;
 ```
 
 - **Menu Bar**: A `JMenuBar` holds multiple menus for different entities.
-- **Menus**: Includes menus for Beneficiaries, Guardians, Locations, Family Status, Education, Income, Programs, Children, Siblings, Users, and Reports.
-- **Menu Items**: Each menu typically contains "View" and "Add" options to perform respective actions.
+- **Menus**: Includes menus for Reports, Beneficiaries, Guardians, Locations, Family, Education, etc.
+- **Menu Items**: Each menu (except reports which only contains "View Reports") contains "View" and "Add" options to perform respective actions.
 
 ### Example: Reports Menu
 
@@ -223,9 +223,3 @@ public static void main(String[] args) {
 - **Process**:
   - Instantiates the `ManagerDashboard` class.
   - Sets the dashboard window to be visible.
-
----
-
-## Conclusion
-
-The `ManagerDashboard.java` class serves as the central hub for managing various aspects of the school management system. Its modular design, with dynamic methods for viewing and adding records, ensures scalability and ease of maintenance. Key features like search functionality, sorting, ENUM handling, and foreign key management enhance the user experience and data integrity. Understanding this structure enables developers to extend and customize the dashboard to meet evolving requirements.

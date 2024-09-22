@@ -11,36 +11,38 @@ import java.awt.event.ActionListener;
 import java.sql.*;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.awt.*;
 import school.ReportsPage;
 
 public class ManagerDashboard extends JFrame {
     private JMenuBar menuBar;
-    private JMenu menuBeneficiaries, menuGuardians, menuLocations, menuFamilyStatus, menuEducation, menuIncome,
-            menuPrograms, menuChildren, menuSiblings, menuUsers;
+    private JMenu menuBeneficiaries, menuGuardians, menuLocations, menuFamilies, menuPrograms,
+            menuChildren, menuHealth, menuProsperity, menuEducation, menuUsers, menuFamilyMembers;
     private JMenuItem menuItemViewBeneficiaries, menuItemAddBeneficiary;
     private JMenuItem menuItemViewGuardians, menuItemAddGuardian;
     private JMenuItem menuItemViewLocations, menuItemAddLocation;
-    private JMenuItem menuItemViewFamilyStatus, menuItemAddFamilyStatus;
-    private JMenuItem menuItemViewEducation, menuItemAddEducation;
-    private JMenuItem menuItemViewIncome, menuItemAddIncome;
+    private JMenuItem menuItemViewFamilies, menuItemAddFamily;
     private JMenuItem menuItemViewPrograms, menuItemAddProgram;
     private JMenuItem menuItemViewChildren, menuItemAddChild;
-    private JMenuItem menuItemViewSiblings, menuItemAddSibling;
+    private JMenuItem menuItemViewHealth, menuItemAddHealth;
+    private JMenuItem menuItemViewProsperity, menuItemAddProsperity;
+    private JMenuItem menuItemViewEducation, menuItemAddEducation;
     private JMenuItem menuItemViewUsers, menuItemAddUser;
+    private JMenuItem menuItemViewFamilyMembers, menuItemAddFamilyMember;
     private JPanel mainPanel;
 
-    // Add the following interface inside the ManagerDashboard class
-public interface RecordSelectionListener {
-    void onRecordSelected(int selectedId, String displayValue);
-}
+    public interface RecordSelectionListener {
+        void onRecordSelected(int selectedId, String displayValue);
+    }
 
     private void viewTable(String tableName, String[] joinTables, RecordSelectionListener listener) {
         JFrame viewFrame = new JFrame("View " + tableName);
         viewFrame.setSize(1300, 700); // Increased size to accommodate search components
         viewFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         viewFrame.setLayout(new BorderLayout());
-    
+
         // Create a panel for search
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JLabel searchLabel = new JLabel("Search: ");
@@ -51,27 +53,27 @@ public interface RecordSelectionListener {
         searchPanel.add(searchField);
         searchPanel.add(searchButton);
         searchPanel.add(resetButton);
-    
+
         viewFrame.add(searchPanel, BorderLayout.NORTH);
-    
+
         DefaultTableModel model = new DefaultTableModel();
         JTable table = new JTable(model);
         table.setAutoCreateRowSorter(true); // Enable sorting
-    
+
         // RowSorter for filtering
         TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(model);
         table.setRowSorter(sorter);
-    
+
         JScrollPane scrollPane = new JScrollPane(table);
         viewFrame.add(scrollPane, BorderLayout.CENTER);
-    
+
         // If in selection mode, add a Select button
         if (listener != null) {
             JButton selectButton = new JButton("Select");
             JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
             buttonPanel.add(selectButton);
             viewFrame.add(buttonPanel, BorderLayout.SOUTH);
-    
+
             selectButton.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     int selectedRow = table.getSelectedRow();
@@ -81,47 +83,53 @@ public interface RecordSelectionListener {
                         Object idValue = model.getValueAt(modelRow, 0); // ID must be in the first column
                         Object displayValue = model.getValueAt(modelRow, 1); // uses column next to ID as display value
                         if (idValue instanceof Integer) {
-                            listener.onRecordSelected((Integer) idValue, displayValue != null ? displayValue.toString() : "");
+                            listener.onRecordSelected((Integer) idValue,
+                                    displayValue != null ? displayValue.toString() : "");
                             viewFrame.dispose();
                         } else {
-                            JOptionPane.showMessageDialog(viewFrame, "Invalid ID selected.", "Error", JOptionPane.ERROR_MESSAGE);
+                            JOptionPane.showMessageDialog(viewFrame, "Invalid ID selected.", "Error",
+                                    JOptionPane.ERROR_MESSAGE);
                         }
                     } else {
-                        JOptionPane.showMessageDialog(viewFrame, "Please select a record to proceed.", "No Selection", JOptionPane.WARNING_MESSAGE);
+                        JOptionPane.showMessageDialog(viewFrame, "Please select a record to proceed.", "No Selection",
+                                JOptionPane.WARNING_MESSAGE);
                     }
                 }
             });
         }
-    
+
         StringBuilder query = new StringBuilder("SELECT * FROM " + tableName + " t1");
-    
+
         if (joinTables != null) {
             int aliasIndex = 2; // Start alias index from 2 since t1 is used for the main table
             for (String joinTable : joinTables) {
                 String joinAlias = "t" + aliasIndex;
                 String joinColumn = "id"; // Primary key of the join table
-                String baseColumn = joinTable.toLowerCase() + "_id"; // Foreign key in the main table
+
+                // Determine the foreign key column name
+                String baseColumn = customForeignKeyMap.getOrDefault(joinTable, joinTable.toLowerCase() + "_id");
+
                 query.append(" JOIN ").append(joinTable).append(" ").append(joinAlias)
-                     .append(" ON t1.").append(baseColumn).append(" = ").append(joinAlias)
-                     .append(".").append(joinColumn);
+                        .append(" ON t1.").append(baseColumn).append(" = ").append(joinAlias)
+                        .append(".").append(joinColumn);
                 aliasIndex++;
             }
         }
-    
+
         try (Connection c = login2.getConnection();
-             Statement stmt = c.createStatement();
-             ResultSet rs = stmt.executeQuery(query.toString())) {
-    
+                Statement stmt = c.createStatement();
+                ResultSet rs = stmt.executeQuery(query.toString())) {
+
             ResultSetMetaData metaData = rs.getMetaData();
             int columnCount = metaData.getColumnCount();
             // Identify columns to include
             ArrayList<Integer> columnsToInclude = new ArrayList<>();
             ArrayList<String> columnNames = new ArrayList<>();
-    
+
             for (int i = 1; i <= columnCount; i++) {
                 String columnName = metaData.getColumnName(i);
                 String tableNameColumn = metaData.getTableName(i);
-    
+
                 // Include the main table's 'id'
                 if ("id".equalsIgnoreCase(columnName) && tableNameColumn.equalsIgnoreCase(tableName)) {
                     columnsToInclude.add(i);
@@ -136,12 +144,12 @@ public interface RecordSelectionListener {
                     }
                 }
             }
-    
+
             // Add column names to the table model
             for (String colName : columnNames) {
                 model.addColumn(colName);
             }
-    
+
             // Add rows to the table model
             while (rs.next()) {
                 Object[] row = new Object[columnsToInclude.size()];
@@ -152,9 +160,10 @@ public interface RecordSelectionListener {
             }
         } catch (SQLException e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(viewFrame, "Error fetching data: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(viewFrame, "Error fetching data: " + e.getMessage(), "Error",
+                    JOptionPane.ERROR_MESSAGE);
         }
-    
+
         // Adjust column widths
         for (int col = 0; col < table.getColumnCount(); col++) {
             TableColumn tableColumn = table.getColumnModel().getColumn(col);
@@ -164,7 +173,7 @@ public interface RecordSelectionListener {
             int headerWidth = headerComp.getPreferredSize().width;
             tableColumn.setPreferredWidth(headerWidth + 20); // Add padding for better readability
         }
-    
+
         // Search button action
         searchButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
@@ -177,7 +186,7 @@ public interface RecordSelectionListener {
                 }
             }
         });
-    
+
         // Reset button action
         resetButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
@@ -185,14 +194,14 @@ public interface RecordSelectionListener {
                 sorter.setRowFilter(null);
             }
         });
-    
+
         // Allow pressing Enter to trigger search
         searchField.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 searchButton.doClick();
             }
         });
-    
+
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); // Enable horizontal scrolling
         viewFrame.setVisible(true);
     }
@@ -206,26 +215,26 @@ public interface RecordSelectionListener {
         JFrame addFrame = new JFrame("Add Record to " + tableName);
         addFrame.setSize(500, 600);
         addFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-    
+
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5,5,5,5);
+        gbc.insets = new Insets(5, 5, 5, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.gridx = 0;
         gbc.gridy = 0;
-    
+
         java.util.Map<String, JComponent> fieldMap = new java.util.LinkedHashMap<>();
         java.util.Map<String, Integer> foreignKeyIds = new java.util.HashMap<>(); // To store selected foreign key IDs
-    
+
         try (Connection c = login2.getConnection()) {
             DatabaseMetaData metaData = c.getMetaData();
-    
+
             // Retrieve columns for the specified table
             ResultSet columns = metaData.getColumns(null, null, tableName, null);
             java.util.List<String> columnNames = new java.util.ArrayList<>();
             java.util.List<String> columnTypes = new java.util.ArrayList<>();
             java.util.List<String> foreignKeys = new java.util.ArrayList<>();
-    
+
             while (columns.next()) {
                 String columnName = columns.getString("COLUMN_NAME");
                 String dataType = columns.getString("TYPE_NAME");
@@ -238,12 +247,12 @@ public interface RecordSelectionListener {
                     }
                     if (isAutoIncrement) {
                         continue;
-                    } else{
+                    } else {
                         columnNames.add(columnName);
                         columnTypes.add(dataType);
                     }
                 }
-    
+
                 // Check if the column is a foreign key
                 ResultSet fk = metaData.getImportedKeys(null, null, tableName);
                 boolean isForeignKey = false;
@@ -266,20 +275,20 @@ public interface RecordSelectionListener {
                 }
             }
             columns.close();
-    
+
             // Dynamically create input fields based on columns
             for (int i = 0; i < columnNames.size(); i++) {
                 String colName = columnNames.get(i);
                 String colType = columnTypes.get(i);
                 String fkTable = foreignKeys.get(i);
-    
+
                 JLabel label = new JLabel(colName + ":");
                 gbc.gridx = 0;
                 gbc.weightx = 0.3;
                 panel.add(label, gbc);
-    
+
                 JComponent field;
-    
+
                 if (fkTable != null) {
                     // Instead of JComboBox, use a button to open viewTable for selection
                     JPanel fkPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
@@ -289,19 +298,19 @@ public interface RecordSelectionListener {
                     fkPanel.add(fkField);
                     fkPanel.add(selectButton);
                     field = fkPanel;
-    
+
                     selectButton.addActionListener(new ActionListener() {
                         public void actionPerformed(ActionEvent e) {
                             viewTable(fkTable, null, new RecordSelectionListener() {
                                 @Override
                                 public void onRecordSelected(int selectedId, String displayValue) {
-                                    fkField.setText("ID: " + selectedId + " ("+ displayValue + " ...)");
+                                    fkField.setText("ID: " + selectedId + " (" + displayValue + " ...)");
                                     foreignKeyIds.put(colName, selectedId);
                                 }
                             });
                         }
                     });
-    
+
                 } else if (colType.contains("INT")) {
                     field = new JTextField(20);
                 } else if (colType.contains("DATE")) {
@@ -316,32 +325,32 @@ public interface RecordSelectionListener {
                 } else {
                     field = new JTextField(20);
                 }
-    
+
                 fieldMap.put(colName, field);
                 gbc.gridx = 1;
                 gbc.weightx = 0.7;
                 panel.add(field, gbc);
                 gbc.gridy++;
             }
-    
+
             // Add Submit Button
             JButton submitButton = new JButton("Add Record");
             gbc.gridx = 0;
             gbc.gridwidth = 2;
             panel.add(submitButton, gbc);
-    
+
             submitButton.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     StringBuilder columnsPart = new StringBuilder();
                     StringBuilder valuesPart = new StringBuilder();
                     java.util.List<Object> values = new java.util.ArrayList<>();
-    
+
                     for (java.util.Map.Entry<String, JComponent> entry : fieldMap.entrySet()) {
                         String colName = entry.getKey();
                         JComponent comp = entry.getValue();
-    
+
                         columnsPart.append(colName).append(", ");
-    
+
                         if (comp instanceof JPanel) { // Foreign key field
                             // Retrieve the selected ID from foreignKeyIds
                             Integer selectedId = foreignKeyIds.get(colName);
@@ -361,16 +370,19 @@ public interface RecordSelectionListener {
                             values.add(selected);
                         }
                     }
-    
+
                     // Remove trailing commas
-                    if (columnsPart.length() > 0) columnsPart.setLength(columnsPart.length() - 2);
-                    if (valuesPart.length() > 0) valuesPart.setLength(valuesPart.length() - 2);
-    
+                    if (columnsPart.length() > 0)
+                        columnsPart.setLength(columnsPart.length() - 2);
+                    if (valuesPart.length() > 0)
+                        valuesPart.setLength(valuesPart.length() - 2);
+
                     String sql = "INSERT INTO " + tableName + " (" + columnsPart + ") VALUES (" + valuesPart + ")";
-    
+
                     try (Connection insertConn = login2.getConnection();
-                    PreparedStatement pstmt = insertConn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-                   for (int i = 0; i < values.size(); i++) {
+                            PreparedStatement pstmt = insertConn.prepareStatement(sql,
+                                    Statement.RETURN_GENERATED_KEYS)) {
+                        for (int i = 0; i < values.size(); i++) {
                             Object value = values.get(i);
                             if (value instanceof String) {
                                 pstmt.setString(i + 1, (String) value);
@@ -382,31 +394,35 @@ public interface RecordSelectionListener {
                                 pstmt.setObject(i + 1, value);
                             }
                         }
-    
+
                         pstmt.executeUpdate();
                         ResultSet generatedKeys = pstmt.getGeneratedKeys();
                         if (generatedKeys.next()) {
-                            JOptionPane.showMessageDialog(addFrame, "Record added successfully with ID: " + generatedKeys.getInt(1));
+                            JOptionPane.showMessageDialog(addFrame,
+                                    "Record added successfully with ID: " + generatedKeys.getInt(1));
                         } else {
                             JOptionPane.showMessageDialog(addFrame, "Record added successfully.");
                         }
                         addFrame.dispose();
                     } catch (SQLException ex) {
                         ex.printStackTrace();
-                        JOptionPane.showMessageDialog(addFrame, "Error adding record: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(addFrame, "Error adding record: " + ex.getMessage(), "Error",
+                                JOptionPane.ERROR_MESSAGE);
                     }
                 }
             });
-    
+
         } catch (SQLException ex) {
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(addFrame, "Error retrieving table metadata: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(addFrame, "Error retrieving table metadata: " + ex.getMessage(), "Error",
+                    JOptionPane.ERROR_MESSAGE);
             return;
         }
-    
+
         addFrame.add(new JScrollPane(panel));
         addFrame.setVisible(true);
     }
+
     /**
      * Helper method to extract ENUM values from a column.
      *
@@ -438,27 +454,36 @@ public interface RecordSelectionListener {
         return enumValues;
     }
 
+
+    // mapping for custom foreign key column names
+    private Map<String, String> customForeignKeyMap;
+
     public ManagerDashboard() {
         setTitle("Manager Dashboard");
-        setSize(800, 600);
+        setSize(850, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+        // Initialize custom foreign key maps
+        customForeignKeyMap = new HashMap<>();
+        customForeignKeyMap.put("Users", "recorded_by");
+        customForeignKeyMap.put("Family_Member", "guardian_id");
 
         // Create the top menu bar
         menuBar = new JMenuBar();
 
         // Reports Menu
-JMenu menuReports = new JMenu("Reports");
-JMenuItem menuItemViewReports = new JMenuItem("View Reports");
-menuReports.add(menuItemViewReports);
-menuBar.add(menuReports);
+        JMenu menuReports = new JMenu("Reports");
+        JMenuItem menuItemViewReports = new JMenuItem("View Reports");
+        menuReports.add(menuItemViewReports);
+        menuBar.add(menuReports);
 
-// Add action listener for the Reports menu item
-menuItemViewReports.addActionListener(new ActionListener() {
-    public void actionPerformed(ActionEvent e) {
-        ReportsPage reportsPage = new ReportsPage();
-        reportsPage.setVisible(true);
-    }
-});
+        // Add action listener for the Reports menu item
+        menuItemViewReports.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                ReportsPage reportsPage = new ReportsPage();
+                reportsPage.setVisible(true);
+            }
+        });
 
         // Beneficiaries Menu
         menuBeneficiaries = new JMenu("Beneficiaries");
@@ -484,29 +509,21 @@ menuItemViewReports.addActionListener(new ActionListener() {
         menuLocations.add(menuItemAddLocation);
         menuBar.add(menuLocations);
 
-        // Family Status Menu
-        menuFamilyStatus = new JMenu("Family Status");
-        menuItemViewFamilyStatus = new JMenuItem("View Family Status");
-        menuItemAddFamilyStatus = new JMenuItem("Add Family Status");
-        menuFamilyStatus.add(menuItemViewFamilyStatus);
-        menuFamilyStatus.add(menuItemAddFamilyStatus);
-        menuBar.add(menuFamilyStatus);
+        // Families Menu
+        menuFamilies = new JMenu("Families");
+        menuItemViewFamilies = new JMenuItem("View Families");
+        menuItemAddFamily = new JMenuItem("Add Family");
+        menuFamilies.add(menuItemViewFamilies);
+        menuFamilies.add(menuItemAddFamily);
+        menuBar.add(menuFamilies);
 
-        // Education Menu
-        menuEducation = new JMenu("Education");
-        menuItemViewEducation = new JMenuItem("View Education");
-        menuItemAddEducation = new JMenuItem("Add Education");
-        menuEducation.add(menuItemViewEducation);
-        menuEducation.add(menuItemAddEducation);
-        menuBar.add(menuEducation);
-
-        // Income Menu
-        menuIncome = new JMenu("Income");
-        menuItemViewIncome = new JMenuItem("View Income");
-        menuItemAddIncome = new JMenuItem("Add Income");
-        menuIncome.add(menuItemViewIncome);
-        menuIncome.add(menuItemAddIncome);
-        menuBar.add(menuIncome);
+        // Family Members Menu
+        menuFamilyMembers = new JMenu("Family Members");
+        menuItemViewFamilyMembers = new JMenuItem("View Family Members");
+        menuItemAddFamilyMember = new JMenuItem("Add Family Member");
+        menuFamilyMembers.add(menuItemViewFamilyMembers);
+        menuFamilyMembers.add(menuItemAddFamilyMember);
+        menuBar.add(menuFamilyMembers);
 
         // Programs Menu
         menuPrograms = new JMenu("Programs");
@@ -524,13 +541,29 @@ menuItemViewReports.addActionListener(new ActionListener() {
         menuChildren.add(menuItemAddChild);
         menuBar.add(menuChildren);
 
-        // Siblings Menu
-        menuSiblings = new JMenu("Siblings");
-        menuItemViewSiblings = new JMenuItem("View Siblings");
-        menuItemAddSibling = new JMenuItem("Add Sibling");
-        menuSiblings.add(menuItemViewSiblings);
-        menuSiblings.add(menuItemAddSibling);
-        menuBar.add(menuSiblings);
+        // Health Menu
+        menuHealth = new JMenu("Health");
+        menuItemViewHealth = new JMenuItem("View Health Records");
+        menuItemAddHealth = new JMenuItem("Add Health Record");
+        menuHealth.add(menuItemViewHealth);
+        menuHealth.add(menuItemAddHealth);
+        menuBar.add(menuHealth);
+
+        // Prosperity Menu
+        menuProsperity = new JMenu("Prosperity");
+        menuItemViewProsperity = new JMenuItem("View Prosperity Records");
+        menuItemAddProsperity = new JMenuItem("Add Prosperity Record");
+        menuProsperity.add(menuItemViewProsperity);
+        menuProsperity.add(menuItemAddProsperity);
+        menuBar.add(menuProsperity);
+
+        // Education Menu
+        menuEducation = new JMenu("Education");
+        menuItemViewEducation = new JMenuItem("View Education Records");
+        menuItemAddEducation = new JMenuItem("Add Education Record");
+        menuEducation.add(menuItemViewEducation);
+        menuEducation.add(menuItemAddEducation);
+        menuBar.add(menuEducation);
 
         // Users Menu
         menuUsers = new JMenu("Users");
@@ -558,7 +591,9 @@ menuItemViewReports.addActionListener(new ActionListener() {
         // Add the main panel to the frame
         getContentPane().add(mainPanel, BorderLayout.CENTER);
 
-        // action listeners for the menu items
+        // Action listeners for the menu items
+
+        // Beneficiaries
         menuItemViewBeneficiaries.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 viewTable("Beneficiary", null, null);
@@ -571,18 +606,20 @@ menuItemViewReports.addActionListener(new ActionListener() {
             }
         });
 
+        // Guardians
         menuItemViewGuardians.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Guardian", null, null);
+                viewTable("Family_Member", null, null);
             }
         });
 
         menuItemAddGuardian.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                addRecord("Guardian");
+                addRecord("Family_Member");
             }
         });
 
+        // Locations
         menuItemViewLocations.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 viewTable("Location", null, null);
@@ -595,42 +632,33 @@ menuItemViewReports.addActionListener(new ActionListener() {
             }
         });
 
-        menuItemViewFamilyStatus.addActionListener(new ActionListener() {
+        // Families
+        menuItemViewFamilies.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Family_Status", null, null);
+                viewTable("Family", null, null);
             }
         });
 
-        menuItemAddFamilyStatus.addActionListener(new ActionListener() {
+        menuItemAddFamily.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                addRecord("Family_Status");
+                addRecord("Family");
             }
         });
 
-        menuItemViewEducation.addActionListener(new ActionListener() {
+        // Family Members
+        menuItemViewFamilyMembers.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Education", null, null);
+                viewTable("Family_Member", new String[] { "Family" }, null);
             }
         });
 
-        menuItemAddEducation.addActionListener(new ActionListener() {
+        menuItemAddFamilyMember.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                addRecord("Education");
+                addRecord("Family_Member");
             }
         });
 
-        menuItemViewIncome.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                viewTable("Income", null, null);
-            }
-        });
-
-        menuItemAddIncome.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                addRecord("Income");
-            }
-        });
-
+        // Programs
         menuItemViewPrograms.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 viewTable("Program", null, null);
@@ -643,10 +671,10 @@ menuItemViewReports.addActionListener(new ActionListener() {
             }
         });
 
+        // Children
         menuItemViewChildren.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Child", new String[] { "Beneficiary", "Guardian", "Location", "Family_Status", "Education",
-                        "Income", "program" }, null);
+                viewTable("Child", new String[] { "Beneficiary", "Family", "Family_Member", "Location", "Program" }, null);
             }
         });
 
@@ -656,18 +684,46 @@ menuItemViewReports.addActionListener(new ActionListener() {
             }
         });
 
-        menuItemViewSiblings.addActionListener(new ActionListener() {
+        // Health Records
+        menuItemViewHealth.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                viewTable("Sibling", new String[] { "Child" }, null);
+                viewTable("Health", new String[] { "Child" }, null);
             }
         });
 
-        menuItemAddSibling.addActionListener(new ActionListener() {
+        menuItemAddHealth.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                addRecord("Sibling");
+                addRecord("Health");
             }
         });
 
+        // Prosperity Records
+        menuItemViewProsperity.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                viewTable("Prosperity", new String[] { "Family" }, null);
+            }
+        });
+
+        menuItemAddProsperity.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                addRecord("Prosperity");
+            }
+        });
+
+        // Education Records
+        menuItemViewEducation.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                viewTable("Education", new String[] { "Child" }, null);
+            }
+        });
+
+        menuItemAddEducation.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                addRecord("Education");
+            }
+        });
+
+        // Users
         menuItemViewUsers.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 viewTable("Users", null, null);
@@ -683,7 +739,7 @@ menuItemViewReports.addActionListener(new ActionListener() {
         // Add action listener for the logout button
         logoutButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                // go to login page
+                // Go to login page
                 login2 LoginFrame;
                 LoginFrame = new login2();
                 LoginFrame.setVisible(true);

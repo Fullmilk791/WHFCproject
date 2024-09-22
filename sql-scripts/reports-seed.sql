@@ -73,13 +73,13 @@ VALUES
     ('National Youth Development', '2024-01-01', '2024-12-31', 'Youth empowerment across Ethiopia');
 
 -- Insert data into Child table
-INSERT INTO Child (beneficiary_id, name, parents_status, guardian_id, location_id, program_id, sex, yob, year_joined, year_of_stay, current_grade)
+INSERT INTO Child (beneficiary_id, name, parents_status, family_id, guardian_id, location_id, program_id, sex, yob, year_joined, year_of_stay, current_grade)
 VALUES
-    (1, 'Managidosh Marsamo', 'Half orphan', 1, 1, 1, 'F', '2001-09-11', '2006-12-18', 18, 'TVET'),
-    (2, 'Abebe Kebede', 'Both parents', 2, 2, 2, 'M', '2005-03-22', '2010-01-15', 14, 'Grade 10'),
-    (3, 'Fatima Mohammed', 'Single parent', 3, 3, 3, 'F', '2008-11-07', '2015-09-01', 9, 'Grade 7'),
-    (4, 'Yonas Hailu', 'Orphan', 4, 4, 4, 'M', '2003-06-30', '2008-02-20', 16, 'Grade 12'),
-    (5, 'Hiwot Gebre', 'Both parents', 5, 5, 5, 'F', '2010-12-25', '2017-08-10', 7, 'Grade 5');
+    (1, 'Managidosh Marsamo', 'Half orphan', 1, 1, 1, 1, 'F', '2001-09-11', '2006-12-18', 18, 'TVET'),
+    (2, 'Abebe Kebede', 'Both parents', 2, 2, 2, 2, 'M', '2005-03-22', '2010-01-15', 14, 'Grade 10'),
+    (3, 'Fatima Mohammed', 'Single parent', 3, 3, 3, 3, 'F', '2008-11-07', '2015-09-01', 9, 'Grade 7'),
+    (4, 'Yonas Hailu', 'Orphan', 4, 4, 4, 4, 'M', '2003-06-30', '2008-02-20', 16, 'Grade 12'),
+    (5, 'Hiwot Gebre', 'Both parents', 5, 5, 5, 5, 'F', '2010-12-25', '2017-08-10', 7, 'Grade 5');
 
 -- Insert data into Education table
 INSERT INTO Education (child_id, student_achievement, performance_index, education_year, recorded_by, date_of_recording)
